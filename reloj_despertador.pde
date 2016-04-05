@@ -25,6 +25,8 @@ const char* festivos[]={"150518","150608","150615","150629","150817","151012","1
 
 // ***** LCD *****
 LiquidCrystal lcd( 10,11,12,13,14,15 );
+byte pinBacklight = 7;
+bool bToggleBacklightWasPressed = false;
 // Custom characters:
 byte const heart[] PROGMEM = {0,10,31,31,31,14,4,0};
 byte const smiley[] PROGMEM= {0,0,10,0,0,17,14,0};
@@ -118,9 +120,10 @@ boolean bPrintMsg=false;
 byte secsMsg=0;
 
 // ***** Others *****
-bool bIsAlOn = false; // A sound was triggered
-bool bIsAnAlarm = false; //The sound is an alarm
+bool bIsAlOn = false; // A sound was triggered (prevent other sounds to be played for a while)
+bool bIsAnAlarm = false; //The sound is an alarm (if alarm sound is stopped we show a dialog, other sounds are stopped and that's all)
 byte secsAftA = 0;
+byte secsToAvoidCollision = 60; // Time to wait before enabling other sounds to be played
 unsigned int secsToW = 0;
 boolean b10m = false; //Sonaren10?
 byte moon=255;
@@ -157,6 +160,9 @@ void setup(){
   lcd.createChar(6, (byte*)bufS);
   for (i=0;i<8;i++) bufS[i]=pgm_read_byte(&lMenguante[i]);
   lcd.createChar(7, (byte*)bufS);
+  
+  //Initialize backlight pin
+  pinMode(pinBacklight, OUTPUT);
   
   // Initialize audio and microSD
   pinMode(SS, OUTPUT);
@@ -208,25 +214,50 @@ void loop(){
     if ( !bIsAlOn and isAlarmEnabled(1) ) shouldAlarmSound(1,dow,year,month,date,hour,minute);
     if ( !bIsAlOn and isAlarmEnabled(2) ) shouldAlarmSound(2,dow,year,month,date,hour,minute);    
 
-    if (minute == 0 and !bIsAlOn){ // En punto
+    if (minute == 0 and second == 0 and !bIsAlOn){ // En punto
       if (hour>22 or hour<8) tmrpcm.setVolume(0.1);
-      else tmrpcm.setVolume(2.8);
-      tmrpcm.play("6.wav");
+      else tmrpcm.setVolume(3.2);
+      tmrpcm.play("sharp.wav");
+      secsToAvoidCollision = 3;
       bIsAlOn=true;
       bIsAnAlarm=false;
     }
     if (hour==22 and minute == 1 and !bIsAlOn){ // DOKI
-      tmrpcm.setVolume(2);
-      tmrpcm.play("doki.wav");
-      bIsAlOn=true;
-      bIsAnAlarm=false;
+      if (digitalRead(pinBacklight) == HIGH) { // If backlight is off we don't want the sound 
+        tmrpcm.setVolume(2);
+        tmrpcm.play("doki.wav");
+        bIsAlOn=true;
+        bIsAnAlarm=false; 
+      }
+    }
+    
+    // Handle the Backlight 
+    if (((hour==22 and minute == 30) or (hour==6 and minute == 0)) and second == 0){
+      bToggleBacklightWasPressed = false; // Overwrite/Initialize this flag
+    }
+    if (!bToggleBacklightWasPressed){
+      if (hour>=22 or hour<6){  // Turn backlight off
+        if (hour==22 and minute < 30){ 
+          //Do nothing 
+        } else if (digitalRead(pinBacklight) == HIGH) { 
+          digitalWrite( pinBacklight, LOW ); 
+        }
+      }
+      if (hour>=6 and hour<23){ // Turn backlight on
+        if (hour==22 and minute >= 30){
+          // Do nothing
+        } else if (digitalRead(pinBacklight) == LOW) { 
+          digitalWrite( pinBacklight, HIGH ); 
+        }
+      }
     }
     
     if ( bIsAlOn ) {// Alarm was triggered, avoid triggering it again for this minute
-      if (secsAftA == 60){ 
+      if (secsAftA == secsToAvoidCollision){ 
         bIsAlOn=false; 
         secsAftA = 0;
         tmrpcm.setVolume(0.1); // Be quiet when idle
+        secsToAvoidCollision = 60; //Reset this to the default
       } else secsAftA++; 
     }
   }  
@@ -235,7 +266,8 @@ void loop(){
 
     kP=getKeyPressed();
     shouldSoundStop();
-  
+    shouldToggleBackLight();
+    
     // Settings
     configWarning();
     configAlarm(1);
@@ -498,15 +530,12 @@ String getWarningTime(){
 }
 void shouldWarningSound(){
   if ( secsToW==0 ){
-    soundWarning();
+    tmrpcm.setVolume(3.8);
+    tmrpcm.play("supero.wav");  
     EEPROM.write(wEnA,0);
     bIsAlOn=true;
     bIsAnAlarm=false;
   }
-}
-void soundWarning(){
-  tmrpcm.setVolume(3.8);
-  tmrpcm.play("supero.wav");  
 }
 
 //********************************* A L A R M ***********************************************
@@ -650,6 +679,11 @@ void shouldAlarmSound(byte a, byte DoW, byte y, byte mo, byte d, byte h, byte m)
     bIsAlOn=true; 
     bIsAnAlarm=true;
     
+    // Turn the backlight on for 2 reasons: 
+    //  1. We would be able to read snooze messages if it's still dark.
+    //  2. Light itself could help us wake up.
+    digitalWrite( pinBacklight, HIGH );  
+    
     byte type;
     if (a==1) type = EEPROM.read(a1TyA);
     else type = EEPROM.read(a2TyA);
@@ -707,6 +741,13 @@ void soundAlarm(byte alarm, byte d){
   tmrpcm.setVolume(3.2);
   tmrpcm.play(audios[d%8+3]); // 3 - 10
 }
+void soundDoneConfiguring(){
+  tmrpcm.setVolume(3);
+  tmrpcm.play("ready.wav");
+  secsToAvoidCollision = 3;
+  bIsAlOn=true;
+  bIsAnAlarm=false;  
+}
 
 //**************************** 1 0   m i n u t e s ***********************************************
 void ask10min(){
@@ -722,7 +763,14 @@ void ask10min(){
     }
     kP=getKeyPressed();
   }
-  if (b10m) en10Millis = millis();  
+  soundDoneConfiguring();
+  
+  if (b10m) {
+    en10Millis = millis();  
+    
+    // Turn the backlight off, so that we can go back to sleep in the meantime
+    digitalWrite( pinBacklight, LOW );
+  }
   else bIsAnAlarm=false;
 }
 void print10Min(){
@@ -821,6 +869,9 @@ void configClock(){
     if (mo!=oldMo) Clock.setMonth(mo);
     if (y!=oldY) Clock.setYear(y);
     lcd.clear();
+    
+    // Playback a sound to know we are done with settings
+    soundDoneConfiguring();
   }
 }
 void printClock(){
@@ -865,6 +916,16 @@ void shouldSoundStop(){
     tmrpcm.stopPlayback();      
     tmrpcm.setVolume(0.1);
     if (bIsAnAlarm) ask10min();  
+    kP=-1; // Don't go to config settings
+  }
+}
+void shouldToggleBackLight(){
+  if (kP>=0 and kP<4){ //Any key other than Select and there was not sound to stop
+    // Toggle both backlight and flag
+    if (digitalRead(pinBacklight) == HIGH) { digitalWrite( pinBacklight, LOW ); } 
+    else { digitalWrite( pinBacklight, HIGH ); }
+    if (bToggleBacklightWasPressed) { bToggleBacklightWasPressed = false; } 
+    else { bToggleBacklightWasPressed = true; }
     kP=-1; // Don't go to config settings
   }
 }
