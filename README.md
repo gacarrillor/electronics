@@ -1,5 +1,5 @@
 # Electronics
-Source code of my electronic projects based on Wiring, Arduino, and ATitny.
+Source code of my electronic projects based on Wiring, Arduino, and ATtiny.
 
 ## Christmas Train Lighting (2013) 
 Source code: [train_lighting.ino](https://github.com/gacarrillor/electronics/blob/master/train_lighting.ino)
