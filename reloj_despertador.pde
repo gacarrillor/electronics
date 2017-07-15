@@ -128,7 +128,7 @@ unsigned int secsToW = 0;
 boolean b10m = false; //Sonaren10?
 byte moon=255;
 byte toMoon=255;
-char* audios[]={"libselva.wav","fprince.wav","nunusual.wav","mapale.wav","arriba.wav","birds1.wav","birds2.wav","birds3.wav","birds4.wav","birds5.wav","birds6.wav","birds7.wav","gallo.wav"};
+char* audios[]={"mygirl.wav","smile.wav","libselva.wav","fprince.wav","nunusual.wav","mapale.wav","arriba.wav","birds1.wav","birds2.wav","birds3.wav","birds4.wav","birds5.wav","birds6.wav","birds7.wav","gallo.wav"};
 unsigned long currMillis; // To async running
 unsigned long prevMillis;
 unsigned long en10Millis;
