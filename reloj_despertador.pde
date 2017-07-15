@@ -1,6 +1,6 @@
 /*
   German Carrillo, Marzo de 2015
-  geotux_tuxman [at] linuxmail.org
+  gcarrillo [at] linuxmail.org
   Compartido bajo licencia GPL v.2.0
 */
 
@@ -128,7 +128,7 @@ unsigned int secsToW = 0;
 boolean b10m = false; //Sonaren10?
 byte moon=255;
 byte toMoon=255;
-char* audios[]={"adams.wav","mapale.wav","arriba.wav","birds1.wav","birds2.wav","birds3.wav","birds4.wav","birds5.wav","birds6.wav","birds7.wav","gallo.wav"};
+char* audios[]={"libselva.wav","fprince.wav","nunusual.wav","mapale.wav","arriba.wav","birds1.wav","birds2.wav","birds3.wav","birds4.wav","birds5.wav","birds6.wav","birds7.wav","gallo.wav"};
 unsigned long currMillis; // To async running
 unsigned long prevMillis;
 unsigned long en10Millis;
@@ -222,10 +222,10 @@ void loop(){
       bIsAlOn=true;
       bIsAnAlarm=false;
     }
-    if (hour==22 and minute == 1 and !bIsAlOn){ // DOKI
+    if (hour==22 and minute == 1 and !bIsAlOn){ // Go to bed
       if (digitalRead(pinBacklight) == HIGH) { // If backlight is off we don't want the sound 
         tmrpcm.setVolume(2);
-        tmrpcm.play("doki.wav");
+        tmrpcm.play(audios[date%2]); // 0 - 1: My Girl, Smile
         bIsAlOn=true;
         bIsAnAlarm=false; 
       }
@@ -278,7 +278,7 @@ void loop(){
   if (b10m){
     if (currMillis-en10Millis>=600000 and !bIsAlOn){ //10m   600000
       tmrpcm.setVolume(2);
-      tmrpcm.play(audios[date%3]); // 0 (adams) or 1 (mapale) or 2 (arriba juan)
+      tmrpcm.play(audios[date%5+2]); // 2 - 6: libselva, fprince, nunusual, mapale, arriba
       bIsAlOn=true;
       b10m=false;
     }
@@ -675,14 +675,14 @@ void prevAlarmType(byte a){
 }
 void shouldAlarmSound(byte a, byte DoW, byte y, byte mo, byte d, byte h, byte m){
   if ( checkAlarm(a, DoW, y, mo, d, h, m) ){
-    soundAlarm(a, d);
-    bIsAlOn=true; 
-    bIsAnAlarm=true;
-    
     // Turn the backlight on for 2 reasons: 
     //  1. We would be able to read snooze messages if it's still dark.
     //  2. Light itself could help us wake up.
     digitalWrite( pinBacklight, HIGH );  
+    
+    soundAlarm(a, d);
+    bIsAlOn=true; 
+    bIsAnAlarm=true;
     
     byte type;
     if (a==1) type = EEPROM.read(a1TyA);
@@ -739,12 +739,12 @@ void soundAlarm(byte alarm, byte d){
   b10m=true;
   en10Millis = millis();    
   tmrpcm.setVolume(3.2);
-  tmrpcm.play(audios[d%8+3]); // 3 - 10
+  tmrpcm.play(audios[d%8+7]); // 7 - 14: Birds, Rooster
 }
 void soundDoneConfiguring(){
-  tmrpcm.setVolume(3);
+  tmrpcm.setVolume(2);
   tmrpcm.play("ready.wav");
-  secsToAvoidCollision = 3;
+  secsToAvoidCollision = 1;
   bIsAlOn=true;
   bIsAnAlarm=false;  
 }
