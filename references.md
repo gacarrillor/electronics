@@ -3,6 +3,7 @@
 ## Electronics
 
  + 🗒️ [De-coupling](http://web.archive.org/web/20220703081632/https://www.thebox.myzen.co.uk/Tutorial/De-coupling.html)
+ + 🗒️ 🎥 [Soldering](https://learn.adafruit.com/collins-lab-soldering/learn-more?view=all)
 
 ## Arduino
 
@@ -20,3 +21,7 @@
 ## Servos
 
  + 🗒️ [Eliminate electrical noise and enhance noise immunity](https://www.roboticstomorrow.com/article/2023/07/optimizing-servo-system-performance-a-comprehensive-guide-to-eliminating-electrical-noise-and-enhancing-noise-immunity/20870)
+ 
+## Others
+
+ + 🗒️ 🎥 [Retro game controller](https://learn.adafruit.com/arcade-bonnet-controller/overview) 🎮
