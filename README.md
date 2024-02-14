@@ -18,7 +18,7 @@ See a step-by-step explanation of this project at [Instructables](http://www.ins
 ## Whistle for my Penalty Kicks Game (2013-2014) 
 Source code: [whistle_penalty_kicks.ino](https://github.com/gacarrillor/electronics/blob/master/whistle_penalty_kicks.ino)
 
-Hear the whistle at [SoundCloud](https://soundcloud.com/germap/whistle).
+Hear the whistle at [SoundCloud](https://soundcloud.com/germap/whistle). See the schematics [here](https://github.com/gacarrillor/electronics/blob/master/diagrams/Pito_con_led_bb.png).
 
 ![Whistle][4]
 
