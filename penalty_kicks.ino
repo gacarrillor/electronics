@@ -1,124 +1,70 @@
 /*
--------------------
-copyright : (C) 2013 by Germán Carrillo
-email : geotux_tuxman@linuxmail.org
-----------------------------------------------------------------------------
-----------------------------------------------------------------------------
-* *
-* This program is free software; you can redistribute it and/or modify *
-* it under the terms of the GNU General Public License as published by *
-* the Free Software Foundation; either version 2 of the License, or *
-* (at your option) any later version. *
-* *
-----------------------------------------------------------------------------
-*/
-
-/*
   Programa para simular movimientos de un arquero en lanzamientos de tiro penal
   En total hay 10 movimientos, dependiendo de la zona del arco que se quiera cubrir.
   
   Dichos 10 movimientos del arquero corresponden a combinaciones de 3 movimientos 
-  independientes controlados a traves de Arduino: Un movimiento de rotacion del 
-  arquero sobre su cadera, un movimiento de traslacion horizontal para dirigirse 
+  independientes controlados a traves de Arduino: Un movimiento de rotación del 
+  arquero sobre su cadera, un movimiento de traslación horizontal para dirigirse 
   hacia los palos, y un movimiento vertical para simular el salto.
+
+  Copyright: (C) 2013 by Germán Carrillo
+  E-mail: gcarrillo [at] linuxmail [dot] org
+  URL: https://www.instructables.com/Soccer-Penalty-Kicks-Game-with-Wiring-and-Arduino
 */
 #include <Servo.h>  // servo library
 
+const bool DEBUG = true;
 
 /*      C     O     N     T     R     O     L       */
 
-int SER_Pin = 12;   //pin 14 on the 75HC595  8
-int RCLK_Pin = 8;  //pin 12 on the 75HC595  9
-int SRCLK_Pin = 7; //pin 11 on the 75HC595 10
+const int dataPin = 12; //pin 14 on the 75HC595  8
+const int latchPin = 8; //pin 12 on the 75HC595  9
+const int clockPin = 7; //pin 11 on the 75HC595 10
+const int inputPin = 5; //To read buttons from 75HC595
 
-#define number_of_74hc595s 2 //How many of the shift registers 
-#define numOfRegisterPins number_of_74hc595s * 8 //do not touch
-
-boolean registers[numOfRegisterPins];
-
-// Pines Arduino para los grupos de botones: A1 <-> Grupo 1, A2 <-> Grupo 2
-const int pinBotones1 = 1;     
-const int pinBotones2 = 2;     
-
-  /* Pos _______________           LEDs   _______________           Grupos _______________           
-        | A  B  C  D  E |                | 6 10  5  3  1 |                | 2  2  2  1  1 |          
-        | F  G  H  I  J |                | 7 11 12  4  2 |                | 2  2  2  1  1 |
+  /* Pos _______________           LEDs   _______________           Botones _______________           
+        | A  B  C  D  E |                | 5  8  4  2  0 |                | 22 20 18 16 14 |          
+        | F  G  H  I  J |                | 6  9 10  3  1 |                | 21 19 17 15 12 |
     =========================        =========================        =========================  
-           R        Y                       9                                1        1
+           R        Y                        7                                13       11
+  
+    Note: Pin numbers refer to 3 SRs in series (0-7, 8-15, 16-22). Pin 23 is not used.
   */
-char posiciones[12] = {'A','B','C','D','E','F','G','H','I','J','R','Y'};
-char LEDs[11] = {6,10,5,3,1,7,11,12,4,2,9};
+const char posiciones[12] = {'A','B','C','D','E','F','G','H','I','J','R','Y'};
+const char LEDs[11] = {6,10,5,3,1,7,11,12,4,2,9};
 
-// Limite para considerar que no hay boton presionado
-const int LIMITE_LECTURA_NULA = 400;
-
-// Grupo de botones del pin A1
-const int BOTON1_1LOW = 521;
-const int BOTON1_1HIGH = 615;
-const int BOTON1_2LOW = 627;
-const int BOTON1_2HIGH = 699;
-const int BOTON1_3LOW = 712;
-const int BOTON1_3HIGH = 756;
-const int BOTON1_4LOW = 787;
-const int BOTON1_4HIGH = 838;
-const int BOTON1_5LOW = 881;
-const int BOTON1_5HIGH = 933;
-const int BOTON1_6LOW = 950;
-const int BOTON1_6HIGH = 1024;
-
-// Grupo de botones del pin A2
-const int BOTON2_1LOW = 520;
-const int BOTON2_1HIGH = 596;
-const int BOTON2_2LOW = 626;
-const int BOTON2_2HIGH = 696;
-const int BOTON2_3LOW = 708;
-const int BOTON2_3HIGH = 780;
-const int BOTON2_4LOW = 790;
-const int BOTON2_4HIGH = 836;
-const int BOTON2_5LOW = 890;
-const int BOTON2_5HIGH = 930;
-const int BOTON2_6LOW = 950;
-const int BOTON2_6HIGH = 1024;
+const int MAX_PIN_INDEX = 22, MAX_LED_INDEX = 10, MAX_BUTTON_INDEX = MAX_PIN_INDEX;
+const int ledPins[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+const int buttonPins[] = {11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22};
+const int ledFromButton[] = {-1, 1, 7, 0, 3, 2, 10, 4, 9, 8, 6, 5}; // note 11 is not assigned to a LED
+const char posFromButton[] = {'Y', 'J', 'R', 'E', 'I', 'D', 'H', 'C', 'G', 'B', 'F', 'A'};
+byte dataSR1 = 0, dataSR2 = 0, dataSR3 = 0; // Data to be written to SRs
+int pressedButtonPin;
 
 // Constantes velocidad del motor y tiempo (milisegundos)
-const int IZQIZQARR_VEL = 255;
+const int MAX_VEL = 255;
 const int IZQIZQARR_TIE = 460;
-const int IZQARR_VEL = 255;
 const int IZQARR_TIE = 250;
-const int DERARR_VEL = 255;
 const int DERARR_TIE = 250;
-const int DERDERARR_VEL = 255;
 const int DERDERARR_TIE = 435;
-const int IZQIZQABA_VEL = 255;
-const int IZQIZQABA_TIE = 435;
-const int IZQABA_VEL = 255;
+const int IZQIZQABA_TIE = 460;
 const int IZQABA_TIE = 250;
-const int DERABA_VEL = 255;
 const int DERABA_TIE = 250;
-const int DERDERABA_VEL = 255;
 const int DERDERABA_TIE = 435;
 
-// Variables para obtener lectura actual en cada pin
-int lecturaBotones1;
-int lecturaBotones2;
-int lectura; // Para guardar el valor leido, indiferentemente del grupo
-int grupoBotones; // 1 o 2, guarda el grupo al que pertenece el boton presionado
-char posicion;
+char posicion = 'Z'; // Initialize to unknown position
 char posicionTemp; 
-
-int maxLectura = 0; // Guarda el maximo del grupo de valores de cada presion de boton
-boolean bLeyendo = false; // Es true si se estan leyendo valores al presionar un boton
+boolean bLeyendo = false; // Es true si se estan leyendo valores al presionar un botón
 
 
 /*     M O V    H O R I Z O N T A L   Y   R O T A C I O N    */
 
 // Toggle Switch
 const int switchPin = 2;   // Toggle Switch
-int switchState;           // State of the switch
 
-// Potenciometro
-int const potenciometroPin = 0;  //pino analógico onde o potenciômetro está conectado
-int valPotenciometro;            //variável usada para armazenar o valor lido no potenciômetro
+// Potenciómetro
+int const potenciometroPin = 0;  // Pin analógico al cual se conecta el potenciômetro
+int valPotenciometro;            // Variable usada para almacenar el valor del pot.
 
 /*       Motor DC
   Arduino          L293D
@@ -127,15 +73,15 @@ int valPotenciometro;            //variável usada para armazenar o valor lido n
   Pin 3            Pin 2
   Pin 4            Pin 7
 */
-const int pinEntrada1 = 3; // Input 1 de L293D (Pin 3 Arduino)
-const int pinEntrada2 = 4; // Input 2 de L293D (Pin 4 Arduino)
+const int pinEntrada1 = 3; // Input 1 de L293D
+const int pinEntrada2 = 4; // Input 2 de L293D
 const int pinVelocidad = 6;
 
 // Servo
 Servo servo1;  // Servo control object
 const int pinServo = 9;
 
-// Otros
+// Otros (mostly DEBUG or tests)
 boolean reversa;
 int speed;         // Para la funcion serialSpeed
 char serialPos;    // Para la funcion serialPosicion
@@ -147,29 +93,32 @@ boolean botonPresionado = true;  // Bandera para evitar multiples estiradas del 
 Servo servo2;  // servo control object for pin 10
 Servo servo3;  // servo control object for pin 11
 
+const int amplitudServosV = 95;  // Máximo de grados que los servos se desplazan
+
 
 void setup() {
-  pinMode(SER_Pin, OUTPUT);
-  pinMode(RCLK_Pin, OUTPUT);
-  pinMode(SRCLK_Pin, OUTPUT);
-  apagarLEDsBotones();  //reset all register pins
-  Serial.begin(9600);
+  pinMode(dataPin, OUTPUT);
+  pinMode(clockPin, OUTPUT);  
+  pinMode(latchPin, OUTPUT);
+  pinMode(inputPin, INPUT);
+  if (DEBUG){Serial.begin(9600);}
+
+  setAllLEDs(HIGH); // Just to let users know the control starts receiving...
+  delay(500);
+  initializeLEDsAndButtons();
  
   // Si el input analogo 3 esta desconectado, le da valores aleatorios a random 
-  randomSeed(analogRead(3)); 
-  lecturaBotones1 = 0;
-  lecturaBotones2 = 0;
-  lectura = 0;
-  grupoBotones = 0;
+  randomSeed(analogRead(3));
   
   pinMode(switchPin, INPUT);  // Set up the switchPin to be an input  
   pinMode(pinEntrada1, OUTPUT);  
   pinMode(pinEntrada2, OUTPUT);  
   pinMode(pinVelocidad, OUTPUT); 
+
   servo1.attach(pinServo);
   servo1.write(90);    // Tell servo to go to 90 degrees
   
-  servo2.attach(10); // Mano izq. del arquero (desde atras de el)
+  servo2.attach(10); // Mano izq. del arquero (desde atrás de él)
   servo3.attach(11);  
 
   inicializarArquero('H'); // Inicializar servos
@@ -183,8 +132,8 @@ void loop() {
   }
   
   while (digitalRead(switchPin) == LOW) {
-    //serialSpeed();              // Para calibrar
-    //serialPosicion();             // Esta es la de a de veras
+    //serialSpeed(); // Para calibrar
+    //serialPosicion(); // Esta es la de a de veras
     leerControl();        
   }
 }
@@ -197,31 +146,33 @@ void potCarretica() {
   valPotenciometro = constrain(valPotenciometro, -255, 255);
   
   if (valPotenciometro < 0){
-    haciaAdelante();   
+    alistarHaciaDerecha();   
     valPotenciometro *= -1;
     reversa = true;
   } else if (valPotenciometro > 0){
-    haciaAtras();
+    alistarHaciaIzquierda();
     reversa = false;
   }
   
   if (valPotenciometro < 50){
     
     analogWrite(pinVelocidad, 0); // Parar el motor
-    Serial.println("Motor parado...");
+    if (DEBUG){Serial.println("Motor parado...");}
     
   } else {
-    
-    valPotenciometro = map(valPotenciometro, 50, 255, 170, 230);
-    valPotenciometro = constrain(valPotenciometro, 170, 230);
+    valPotenciometro = map(valPotenciometro, 50, 255, 170, 255);
+    valPotenciometro = constrain(valPotenciometro, 170, 255);
+    valPotenciometro = 255;
   
     analogWrite(pinVelocidad, valPotenciometro);
-    if (reversa){
-      Serial.print("Velocidad (R): ");
-    } else {
-      Serial.print("Velocidad:     ");
+    if (DEBUG){
+      if (reversa){
+        Serial.print("Velocidad (R): ");
+      } else {
+        Serial.print("Velocidad:     ");
+      }
+      Serial.println(valPotenciometro);
     }
-    Serial.println(valPotenciometro);
   }
   delay(100);
   analogWrite(pinVelocidad, 0); // Parar el motor
@@ -229,80 +180,90 @@ void potCarretica() {
 
 }
 
-
 void serialSpeed() {
   /* Funcion para graduar la velocidad y el delay que se necesita para estirar el arquero */
   
-  // First we check to see if incoming data is available:
-  while (Serial.available() > 0) {
+  if (DEBUG){
+    // First we check to see if incoming data is available:
+    while (Serial.available() > 0) {
 
-    // If it is, we'll use parseInt() to pull out any numbers:
-    speed = Serial.parseInt();
-    
-    // Manejar numeros negativos para echar el motor hacia atras
-    if (speed < 0) {
-      haciaAtras();
-      speed *= -1;
-      reversa = true;
-    } else {
-      haciaAdelante();
-      reversa = false;
+      // If it is, we'll use parseInt() to pull out any numbers:
+      speed = Serial.parseInt();
+      
+      // Manejar numeros negativos para echar el motor hacia atras
+      if (speed < 0) {
+        alistarHaciaIzquierda();
+        speed *= -1;
+        reversa = true;
+      } else {
+        alistarHaciaDerecha();
+        reversa = false;
+      }
+
+      // Because analogWrite() only works with numbers from
+      // 0 to 255, we'll be sure the input is in that range:
+      speed = constrain(speed, 0, 255);
+      
+      // We'll print out a message to let you know that the
+      // number was received:
+      Serial.print("Nueva velocidad: ");
+      if (reversa) {
+          Serial.print(speed);
+          Serial.println(" (en reversa)"); 
+      } else { 
+        Serial.println(speed);
+      }
+
+      // And finally, we'll set the speed of the motor!
+      analogWrite(pinVelocidad, speed);
+      //digitalWrite(pinVelocidad, HIGH);
+      delay(400);                // delay for onTime milliseconds
+      analogWrite(pinVelocidad, 0);  // Parar el motor antes de cambiar modo
     }
-
-    // Because analogWrite() only works with numbers from
-    // 0 to 255, we'll be sure the input is in that range:
-    speed = constrain(speed, 0, 255);
-    
-    // We'll print ohut a message to let you know that the
-    // number was received:
-    Serial.print("Nueva velocidad: ");
-    if (reversa) {
-        Serial.print(speed);
-        Serial.println(" (en reversa)"); 
-    } else { 
-      Serial.println(speed);
-    }
-
-    // And finally, we'll set the speed of the motor!
-    analogWrite(pinVelocidad, speed);
-    //digitalWrite(pinVelocidad, HIGH);
-    delay(400);                // delay for onTime milliseconds
-    analogWrite(pinVelocidad, 0);  // Parar el motor antes de cambiar modo
   }
 }
 
+void alistarHaciaDerecha(){
+  haciaAdelante();
+}
+
+void alistarHaciaIzquierda(){
+  haciaAtras();
+}
+
 void haciaAdelante() {
-  // Define la direccin del  Motor DC hacia adelante a traves del L293D
+  // Define la dirección del Motor DC hacia adelante a través del L293D
   digitalWrite(pinEntrada1,LOW);
   digitalWrite(pinEntrada2,HIGH);
 }
 
 void haciaAtras() {
-  // Define la direccin del  Motor DC hacia atras a traves del L293D
+  // Define la dirección del Motor DC hacia atrás a través del L293D
   digitalWrite(pinEntrada1,HIGH);
   digitalWrite(pinEntrada2,LOW);
 }
 
-
 void serialPosicion() {
-  /* Funcion para recibir posicion y estira el arquero hacia alla */
+  /* Funcion para recibir posición y estirar el arquero hacia allá */
   
-  // First we check to see if incoming data is available:
-  while (Serial.available() > 0) {
+  if (DEBUG){
+    // First we check to see if incoming data is available:
+    while (Serial.available() > 0) {
 
-    serialPos = Serial.read();
-    
-    Serial.print("Nueva posicion: ");
-    Serial.println(serialPos);
-    
-    if (botonPresionado){
-      botonPresionado = false;
-      estirarArquero(serialPos);
-      delay(5000);
-      if (serialPos == 'A' || serialPos == 'B' || serialPos == 'C' || serialPos == 'D' || serialPos == 'E'){
-        inicializarArquero('C');
-      } else {
-        inicializarArquero('H');
+      serialPos = Serial.read();
+      
+      Serial.print("Nueva posicion: ");
+      Serial.println(serialPos);
+      
+      if (botonPresionado){
+        botonPresionado = false;
+        estirarArquero(serialPos);
+        delay(5000);
+        if (serialPos == 'A' || serialPos == 'B' || serialPos == 'C' || serialPos == 'D' || serialPos == 'E'){
+          inicializarArquero('C');
+        } else {
+          inicializarArquero('H');
+        }
       }
     }
   }
@@ -312,178 +273,216 @@ void serialPosicion() {
 /*  F U N C I O N E S   C O N T R O  L  */
 
 void leerControl(){
-  lecturaBotones1 = analogRead(pinBotones1);
-  Serial.print("Grupo 1: ");
-  Serial.println(lecturaBotones1);
 
-  if (lecturaBotones1 > LIMITE_LECTURA_NULA) {
-    grupoBotones = 1;
-    lectura = lecturaBotones1;
-  } else {
-    lecturaBotones2 = analogRead(pinBotones2);
-    Serial.print("Grupo 2: ");
-    Serial.println(lecturaBotones2); 
-    
-    if (lecturaBotones2 > LIMITE_LECTURA_NULA) {
-      grupoBotones = 2;
-      lectura = lecturaBotones2;
-    } else {
-      lectura = 0; 
-    }
-  }
+  if (digitalRead(inputPin) == HIGH){
+    pressedButtonPin = getPressedButton();
+    posicionTemp = obtenerPosicion(pressedButtonPin);
 
-  // Manejar cuando un boton es presionado
-  //   En ese caso se reciben aprox. 5 valores, puede haber valores que caen en el rango
-  //   de otro boton. Sin embargo, el maximo valor si cae en el rango del boton presionado.
-  if (lectura > LIMITE_LECTURA_NULA) {
-    // Se ha presionado un boton
-    bLeyendo = true;
-    if (lectura > maxLectura) {
-      maxLectura = lectura;
-    }
-  } else { // La lectura es nula
-    if (bLeyendo == true) {
-      // Se termina de leer, ya se puede prender LED y guardar region para estirar
-      bLeyendo = false;  
-      
-      posicionTemp = obtenerPosicion(maxLectura, grupoBotones);
-      if (posicionTemp == 'N') {
-        Serial.print("Se obtuvo una posicion algo loca con la lectura... ");        
-        Serial.print(maxLectura);        
-        Serial.print(" del grupo de botones... ");        
-        Serial.println(grupoBotones);    
-      } else if (posicionTemp == 'Y') {
-        // Estirar arquero a la posicion almacenada con anterioridad
-        estirarArquero(posicion);  
-        apagarLEDsBotones();
-        Serial.print("Se estira el arquero a la posicion...");
-        Serial.println(posicion);
-        delay(4000);
-        inicializarArquero(posicion);
-      } else if (posicionTemp == 'R') { 
-        // Elegir posicion aleatoriamente y almacenarla hasta que se presione el boton 'Y'
+    switch (posicionTemp){
+      case 'Y':
+        if (posicion != 'Z'){
+          // Estirar arquero a la posicion almacenada con anterioridad
+          estirarArquero(posicion);
+          setAllLEDs(LOW);
+
+          if (DEBUG){
+            Serial.print("Se estira el arquero a la posicion...");
+            Serial.println(posicion);
+          }
+          delay(4000);
+
+          inicializarArquero(posicion);
+        }
+        else {
+          if (DEBUG){Serial.println("El arquero no ha elegido una posición para estirarse!");}
+        }
+        break;
+
+      case 'R':
+        // Elegir posición aleatoriamente y almacenarla hasta que se presione el botón 'Y'
         posicion = posiciones[random(10)];
-        while (posicion == 'H'){ // Descartar el centro como opcion para el mov. aleatorio
+        while (posicion == 'H'){ // Descartar el centro como opción para el mov. aleatorio
           posicion = posiciones[random(10)];
         }
-        prenderLEDBoton('R');
-        Serial.println("Elegir region aleatoriamente...");
-      } else {     
-        // Almacenar nueva posicion y prender su LED correspondiente
+        lightLED(getLEDfromButton(pressedButtonPin));
+        if (DEBUG) {Serial.println("Elegir region aleatoriamente...");}
+        break;
+
+      case 'N':
+        if (DEBUG){Serial.println("Se obtuvo una posición errada con la lectura...");}
+        break;
+
+      default: // A valid position (A-J)
+        // Almacenar nueva posición y prender su LED correspondiente
         posicion = posicionTemp;
-        Serial.print("Se ha presionado el boton de la posicion...");
-        Serial.println(posicion);
-        prenderLEDBoton(posicion);
-      }      
+        lightLED(getLEDfromButton(pressedButtonPin));
+        if (DEBUG){
+          Serial.print("Se ha presionado el botón de la posición...");
+          Serial.println(posicion);
+        }
+    }
 
-      // La lectura fue terminada, iniciar con otra nueva
-      maxLectura = 0; 
-    } // else: Viene de lectua nula y sigue en lectura nula (Nada pasa)
+    delay(5);
   }
-  delay(50);  
 }
 
-
-char obtenerPosicion(int lectura, int grupoBotones) {
-  // Devolver la posicion del boton presionado
-  if (grupoBotones == 1)
-    return obtenerPosicion1(lectura);
-  else  if (grupoBotones == 2)
-    return obtenerPosicion2(lectura);
-  else
-    Serial.println("WARNING: Se pide posicion de boton pero el grupo de botones es 0");
+char obtenerPosicion(int pressedButtonPin) {
+  // Devolver la posición del botón presionado
+  return getPosfromButton(pressedButtonPin);
 }
 
-char obtenerPosicion1(int lectura) {
-  if (lectura > BOTON1_6LOW && lectura < BOTON1_6HIGH) 
-    return 'Y';
-  else if (lectura > BOTON1_3LOW && lectura < BOTON1_3HIGH)
-    return 'R';
-  else if (lectura > BOTON1_4LOW && lectura < BOTON1_4HIGH)
-    return 'J';
-  else if (lectura > BOTON1_2LOW && lectura < BOTON1_2HIGH)
-    return 'I';
-  else if (lectura > BOTON1_5LOW && lectura < BOTON1_5HIGH)
-    return 'E';
-  else if (lectura > BOTON1_1LOW && lectura < BOTON1_1HIGH)
-    return 'D';
-  else 
-    return 'N';
-}
+void shiftWrite(int desiredPin, boolean desiredState, boolean write)
 
-char obtenerPosicion2(int lectura) {
-  if (lectura > BOTON2_6LOW && lectura < BOTON2_6HIGH) 
-    return 'H';
-  else if (lectura > BOTON2_2LOW && lectura < BOTON2_2HIGH)
-    return 'F';
-  else if (lectura > BOTON2_1LOW && lectura < BOTON2_1HIGH)
-    return 'A';
-  else if (lectura > BOTON2_4LOW && lectura < BOTON2_4HIGH)
-    return 'G';
-  else if (lectura > BOTON2_5LOW && lectura < BOTON2_5HIGH)
-    return 'C';
-  else if (lectura > BOTON2_3LOW && lectura < BOTON2_3HIGH)
-    return 'B';
-  else 
-    return 'N';
-}
+// This function lets you make the shift register outputs
+// HIGH or LOW in exactly the same way that you use digitalWrite().
 
-void prenderLEDBoton(char pos) {
-  // Prender LEDs de los botones
-  int LED;
-  for(int i = 0; i <  11; i++) {
-    if (posiciones[i] == pos) {
-      LED = LEDs[i];
+// This function takes 3 parameters:
+
+//    "desiredPin" is the shift register output pin
+//    you want to affect (0-7 for the SR1, 8-15 for SR2,
+//    and 15-22 for SR3)
+
+//    "desiredState" is whether you want that output
+//    to be HIGH or LOW
+
+//    "write" is whether you only want to set data variables (false)
+//    or you actually want to write to the SRs. This helps us avoid
+//    intermediate and unnecesary writes while iterating values.
+
+// Inside the Arduino, numbers are stored as arrays of "bits",
+// each of which is a single 1 or 0 value. Because a "byte" type
+// is also eight bits, we'll use a byte (which we named "data"
+// at the top of this sketch) to send data to the shift register.
+// If a bit in the byte is "1", the output will be HIGH. If the bit
+// is "0", the output will be LOW.
+
+// To turn the individual bits in "data" on and off, we'll use
+// a new Arduino commands called bitWrite(), which can make
+// individual bits in a number 1 or 0.
+{
+  // Translate global desiredPin to an index in its SR's
+  int shiftRegisterIndex = desiredPin / 8;
+  desiredPin = desiredPin - 8 * shiftRegisterIndex;  // 17 --> 17 - 8 * 2 --> 1
+
+  switch (shiftRegisterIndex){  // integer division, we get the floor value (e.g., 7/8 = 0)
+    case 0:
+      bitWrite(dataSR1, desiredPin, desiredState);
       break;
+    case 1:
+      bitWrite(dataSR2, desiredPin, desiredState);
+      break;
+    case 2:
+      bitWrite(dataSR3, desiredPin, desiredState);
+      break;
+    default:
+      if (DEBUG){
+        Serial.print("[ERROR] The desiredPin is out f range: ");
+        Serial.println(desiredPin + 8 * shiftRegisterIndex);
+      }
+  }
+
+  // It might be the case of only modifying dataSRs variables and
+  // not sending the data to the SR nor latching.
+  // This is specially useful while setting all index states, and
+  // only being interested in actually writting (send and latch) in 
+  // the last index.
+  if (write){
+    // Now we'll actually send that data to the shift register.
+    // The shiftOut() function does all the hard work of
+    // manipulating the data and clock pins to move the data
+    // into the shift register:
+    // Serial.println(dataSR1);
+    // Serial.println(dataSR2);
+    // Serial.println(dataSR3);
+    shiftOut(dataPin, clockPin, MSBFIRST, dataSR3);
+    shiftOut(dataPin, clockPin, MSBFIRST, dataSR2);
+    shiftOut(dataPin, clockPin, MSBFIRST, dataSR1);
+
+    // Once the data is in the shift register, we still need to
+    // make it appear at the outputs. We'll toggle the state of
+    // the latchPin, which will signal the shift register to "latch"
+    // the data to the outputs. (Latch activates on the high-to
+    // -low transition).
+
+    digitalWrite(latchPin, HIGH);
+    digitalWrite(latchPin, LOW);
+  }
+}
+
+void setAllLEDs(boolean state){
+  for (int index : ledPins)
+    shiftWrite(index, state, index == MAX_LED_INDEX);
+}
+
+void setAllButtons(boolean state){
+  for (int index : buttonPins)
+    shiftWrite(index, state, index == MAX_BUTTON_INDEX);
+}
+
+void initializeLEDsAndButtons(){
+  setAllLEDs(LOW);
+  setAllButtons(HIGH);
+}
+
+int getLEDfromButton(int buttonPin){
+  int ledPin = -1;
+  if (buttonPin != -1) {
+    for (int i = 0; i <= sizeof(buttonPins) / sizeof(buttonPins[0]); i++){
+      if (buttonPins[i] == buttonPin){
+        ledPin = ledFromButton[i];
+        break;
+      }
+    }
+  } 
+  return ledPin;
+}
+
+char getPosfromButton(int buttonPin){
+  char pos = 'N';
+  if (buttonPin != -1) {
+    for (int i = 0; i <= sizeof(buttonPins) / sizeof(buttonPins[0]); i++){
+      if (buttonPins[i] == buttonPin){
+        pos = posFromButton[i];
+        break;
+      }
+    }
+  } 
+  return pos;
+}
+
+int getPressedButton(){
+  int buttonPin = -1;
+  delay(50);
+  setAllButtons(LOW);
+
+  for(int index : buttonPins){
+    shiftWrite(index, HIGH, true);
+    delayMicroseconds(500);
+
+    if(digitalRead(inputPin) == HIGH){
+        buttonPin = index;
+        break;
+    }
+    shiftWrite(index, LOW, true);  // Better than iterating buttons to set them all OFF
+  }
+
+  setAllButtons(HIGH); //Initialize to HIGH to continue reading buttons
+  return buttonPin;
+}
+
+void lightLED(int index){
+  if (index != -1){
+    setAllLEDs(LOW); // First, turn all LEDs off
+    shiftWrite(index, HIGH, true);
+    if (DEBUG){
+      Serial.print("LED on: ");
+      Serial.println(index);
     }
   }
-  clearRegisters();
-  setRegisterPin(LED, HIGH);
-  writeRegisters(); 
-  Serial.print("Se ha encendido el LED...");  
-  Serial.println(LED);  
-}
-
-void apagarLEDsBotones() {
-  clearRegisters();
-  writeRegisters();
-}
-
-
-
-//set all register pins to LOW
-void clearRegisters() {
-  for(int i = numOfRegisterPins - 1; i >=  0; i--) {
-     registers[i] = LOW;
+  else {
+    if (DEBUG){Serial.print("LED index is -1, don't do anything...");}
   }
-} 
-
-
-//Set and display registers
-//Only call AFTER all values are set how you would like (slow otherwise)
-void writeRegisters() {
-
-  digitalWrite(RCLK_Pin, LOW);
-
-  for(int i = numOfRegisterPins - 1; i >=  0; i--) {
-    digitalWrite(SRCLK_Pin, LOW);
-
-    int val = registers[i];
-
-    digitalWrite(SER_Pin, val);
-    digitalWrite(SRCLK_Pin, HIGH);
-
-  }
-  digitalWrite(RCLK_Pin, HIGH);
-
 }
-
-//set an individual pin HIGH or LOW
-void setRegisterPin(int index, int value) {
-  registers[index] = value;
-}
-
-
 
 
 
@@ -536,8 +535,8 @@ void moverAPosicion(char pos) {
 
 
 void izqIzqArr() {       // A
-  haciaAtras();    
-  analogWrite(pinVelocidad, IZQIZQARR_VEL);
+  alistarHaciaIzquierda();    
+  analogWrite(pinVelocidad, MAX_VEL);
   servo1.write(35);    
   subir();
   delay(IZQIZQARR_TIE);                    // delay for some milliseconds  
@@ -546,8 +545,8 @@ void izqIzqArr() {       // A
 
 void izqArr() {          // B
   subir();
-  haciaAtras();    
-  analogWrite(pinVelocidad, IZQARR_VEL);
+  alistarHaciaIzquierda();    
+  analogWrite(pinVelocidad, MAX_VEL);
   servo1.write(80); 
   delay(IZQARR_TIE);                    // delay for some milliseconds
   analogWrite(pinVelocidad, 0);  // Parar el motor 
@@ -560,33 +559,33 @@ void arr() {             // C
 
 void derArr() {          // D
   subir();
-  haciaAdelante();    
-  analogWrite(pinVelocidad, DERARR_VEL);
+  alistarHaciaDerecha();    
+  analogWrite(pinVelocidad, MAX_VEL);
   servo1.write(100);
   delay(DERARR_TIE);                    // delay for some milliseconds
   analogWrite(pinVelocidad, 0);  // Parar el motor 
 }
 
 void derDerArr() {       // E
-  haciaAdelante();    
-  analogWrite(pinVelocidad, DERDERARR_VEL);
-  servo1.write(135);
+  alistarHaciaDerecha();    
+  analogWrite(pinVelocidad, MAX_VEL);
+  servo1.write(145);
   subir();  
   delay(DERDERARR_TIE);                    // delay for some milliseconds 
   analogWrite(pinVelocidad, 0);  // Parar el motor 
 }
 
 void izqIzqAba() {       // F
-  haciaAtras();    
-  analogWrite(pinVelocidad, IZQIZQABA_VEL);
+  alistarHaciaIzquierda();    
+  analogWrite(pinVelocidad, MAX_VEL);
   servo1.write(10);    
   delay(IZQIZQABA_TIE);                    // delay for some milliseconds  
   analogWrite(pinVelocidad, 0);  // Parar el motor 
 }
 
 void izqAba() {          // G
-  haciaAtras();    
-  analogWrite(pinVelocidad, IZQABA_VEL);
+  alistarHaciaIzquierda();    
+  analogWrite(pinVelocidad, MAX_VEL);
   delay(IZQABA_TIE);                    // delay for some milliseconds
   analogWrite(pinVelocidad, 0);  // Parar el motor 
 }
@@ -596,15 +595,15 @@ void quieto() {          // H
 }
 
 void derAba() {          // I
-  haciaAdelante();    
-  analogWrite(pinVelocidad, DERABA_VEL);
+  alistarHaciaDerecha();    
+  analogWrite(pinVelocidad, MAX_VEL);
   delay(DERABA_TIE);                    // delay for some milliseconds
   analogWrite(pinVelocidad, 0);  // Parar el motor 
 }
 
 void derDerAba() {       // J
-  haciaAdelante();    
-  analogWrite(pinVelocidad, DERDERABA_VEL);
+  alistarHaciaDerecha();    
+  analogWrite(pinVelocidad, MAX_VEL);
   servo1.write(170);    
   delay(DERDERABA_TIE);                    // delay for some milliseconds 
   analogWrite(pinVelocidad, 0);  // Parar el motor 
@@ -651,24 +650,23 @@ void inicializarArquero(char pos) {
     bajar();    
     
     if (zona.startsWith("derder")) {
-      servo1.write(90);
-      haciaAtras();    
-      analogWrite(pinVelocidad, DERDERARR_VEL);
+      alistarHaciaIzquierda();    
+      analogWrite(pinVelocidad, MAX_VEL);
       delay(DERDERARR_TIE);                    // delay for some milliseconds  
       analogWrite(pinVelocidad, 0);  // Parar el motor 
     } else if (zona.startsWith("der")) {
-      haciaAtras();    
-      analogWrite(pinVelocidad, DERARR_VEL);
+      alistarHaciaIzquierda();    
+      analogWrite(pinVelocidad, MAX_VEL);
       delay(DERARR_TIE);                    // delay for some milliseconds  
       analogWrite(pinVelocidad, 0);  // Parar el motor   
     } else if (zona.startsWith("izqizq")) {
-      haciaAdelante();    
-      analogWrite(pinVelocidad, IZQIZQARR_VEL);
+      alistarHaciaDerecha();    
+      analogWrite(pinVelocidad, MAX_VEL);
       delay(IZQIZQARR_TIE);                    // delay for some milliseconds  
       analogWrite(pinVelocidad, 0);  // Parar el motor 
     } else if (zona.startsWith("izq")) {
-      haciaAdelante();    
-      analogWrite(pinVelocidad, IZQARR_VEL);
+      alistarHaciaDerecha();    
+      analogWrite(pinVelocidad, MAX_VEL);
       delay(IZQARR_TIE);                    // delay for some milliseconds  
       analogWrite(pinVelocidad, 0);  // Parar el motor   
     } 
@@ -679,23 +677,23 @@ void inicializarArquero(char pos) {
     inicializarServosMovVertical();   
     
     if (zona.startsWith("derder")) {
-      haciaAtras();    
-      analogWrite(pinVelocidad, DERDERABA_VEL);
+      alistarHaciaIzquierda();    
+      analogWrite(pinVelocidad, MAX_VEL);
       delay(DERDERABA_TIE);                    // delay for some milliseconds  
       analogWrite(pinVelocidad, 0);  // Parar el motor 
     } else if (zona.startsWith("der")) {
-      haciaAtras();    
-      analogWrite(pinVelocidad, DERABA_VEL);
+      alistarHaciaIzquierda();    
+      analogWrite(pinVelocidad, MAX_VEL);
       delay(DERABA_TIE);                    // delay for some milliseconds  
       analogWrite(pinVelocidad, 0);  // Parar el motor   
     } else if (zona.startsWith("izqizq")) {
-      haciaAdelante();    
-      analogWrite(pinVelocidad, IZQIZQABA_VEL);
+      alistarHaciaDerecha();    
+      analogWrite(pinVelocidad, MAX_VEL);
       delay(IZQIZQABA_TIE);                    // delay for some milliseconds  
       analogWrite(pinVelocidad, 0);  // Parar el motor 
     } else if (zona.startsWith("izq")) {
-      haciaAdelante();    
-      analogWrite(pinVelocidad, IZQABA_VEL);
+      alistarHaciaDerecha();    
+      analogWrite(pinVelocidad, MAX_VEL);
       delay(IZQABA_TIE);                    // delay for some milliseconds  
       analogWrite(pinVelocidad, 0);  // Parar el motor   
     } 
@@ -710,12 +708,12 @@ void inicializarServosMovVertical() {
 }
 
 void subir() {
-  servo2.write(180);   
-  servo3.write(0);
+  servo2.write(amplitudServosV);
+  servo3.write(180-amplitudServosV);
 }
 
 void bajar() {
-  for(int grados = 180; grados >= 0; grados -= 2) {                                
+  for(int grados = amplitudServosV; grados >= 0; grados -= 2) {                                
     servo2.write(grados);  
     servo3.write(180-grados);  
     delay(20);               // Short pause to allow it to move
