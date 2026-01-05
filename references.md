@@ -2,6 +2,7 @@
 
 ## Electronics
 
+ + 🗒️ [Intro to Electronics](https://www.instructables.com/Basic-Electronics/)
  + 🗒️ [De-coupling](http://web.archive.org/web/20220703081632/https://www.thebox.myzen.co.uk/Tutorial/De-coupling.html)
  + 🗒️ 🎥 [Soldering](https://learn.adafruit.com/collins-lab-soldering/learn-more?view=all)
 
