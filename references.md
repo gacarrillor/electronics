@@ -12,6 +12,17 @@
  + 🗒️ [Fast digitalWrite()](https://roboticsbackend.com/arduino-fast-digitalwrite/)
  + 🗒️ [SPI communication](https://www.circuitbasics.com/how-to-set-up-spi-communication-for-arduino/)
 
+## AtTiny
+
+ + 🗒️ [How to Program an Attiny85 Using a Arduino Uno](https://www.instructables.com/How-to-Program-an-Attiny85-From-an-Arduino-Uno/)
+ + 🗒️ [Programming an ATtiny w/ Arduino 1.6 (or 1.0) ](https://highlowtech.org/?p=1695)
+ + 🗒️🎥 [How-To: Shrinkify Your Arduino Projects](https://makezine.com/article/technology/arduino/how-to-shrinkify-your-arduino-projects-2/)
+ + 🎥 [Program the ATTINY85 with Arduino 1.8.18 (2022)](https://www.youtube.com/watch?v=Z_MhVSlMZI8)
+   + [ATTinyCore library installation](https://github.com/SpenceKonde/ATTinyCore/blob/v2.0.0-devThis-is-the-head-submit-PRs-against-this/Installation.md)
+
+## ATmega
+ + [From Arduino to a Microcontroller (ATmega328P) on a Breadboard](https://docs.arduino.cc/built-in-examples/arduino-isp/ArduinoToBreadboard/)
+
 ## Shift-Registers
 
  + 🎥 [How to Control a Ton of Inputs using Shift Registers!](https://www.youtube.com/watch?v=nXl4fb_LbcI)
