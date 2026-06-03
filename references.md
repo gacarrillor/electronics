@@ -36,4 +36,5 @@
  
 ## Others
 
+ + 💡 [The Untold History of Arduino](https://arduinohistory.github.io/), by Hernando Barragán.
  + 🗒️ 🎥 [Retro game controller](https://learn.adafruit.com/arcade-bonnet-controller/overview) 🎮
