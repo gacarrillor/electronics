@@ -37,4 +37,5 @@
 ## Others
 
  + 💡 [The Untold History of Arduino](https://arduinohistory.github.io/), by Hernando Barragán.
+ + 📗 [Wiring: Prototyping Physical Interaction Design](https://people.interactionivrea.org/h.barragan/thesis/thesis_low_res.pdf), Master thesis, by Hernando Barragán.
  + 🗒️ 🎥 [Retro game controller](https://learn.adafruit.com/arcade-bonnet-controller/overview) 🎮
